@@ -33,6 +33,12 @@ struct cr703_ha {
   } st;
 };
 
+static void cr_st_in_reset(struct cr703_ha *cr) {
+  cr->st.tgt = cr->st.now =
+      (!cr->in.invert ^ !mgos_gpio_read(cr->in.open) ? CR_ST_OPEN : 0) |
+      (!cr->in.invert ^ !mgos_gpio_read(cr->in.shut) ? CR_ST_SHUT : 0);
+}
+
 static bool cr_is_303(const struct cr703_ha *cr) {
   return cr->in.open < 0;
 }
@@ -55,12 +61,6 @@ static void cr_int(int pin, void *opaque) {
   }
 }
 
-static uint8_t cr_st_read(struct cr703_ha *cr) {
-  cr_int(cr->in.open, cr);
-  cr_int(cr->in.shut, cr);
-  return cr->st.now;
-}
-
 static void cr_st_tmr(void *opaque) {
   struct cr703_ha *cr = opaque;
   cr->tmr = MGOS_INVALID_TIMER_ID;
@@ -69,8 +69,8 @@ static void cr_st_tmr(void *opaque) {
   if (cr_is_303(cr))
     cr->st.now = cr->st.tgt;  // Presume successful switching
   else
-    cr->st.tgt = cr_st_read(cr);  // Avoid race b/w timer and interrupts
-  if (cr_st_is_good(cr) && cr->o) mgos_homeassistant_object_send_status(cr->o);
+    cr_st_in_reset(cr);  // Avoid race b/w timer and interrupts
+  if (cr->o) mgos_homeassistant_object_send_status(cr->o);
 }
 
 static void cr_st_set(struct cr703_ha *cr, enum cr703_state tgt) {
@@ -98,6 +98,9 @@ static void cr_stat(struct mgos_homeassistant_object *o, struct json_out *out) {
   const struct cr703_ha *cr = o->user_data;
   if (cr_st_is_good(cr))
     json_printf(out, "state:%Q", ON_OFF(cr->st.now == CR_ST_OPEN));
+  else
+    json_printf(out, "open:%B,shut:%B,state:%Q", cr->st.now & CR_ST_OPEN,
+                cr->st.now & CR_ST_SHUT, NULL);
 }
 
 static bool cr_obj_setup_in(struct cr703_ha *cr) {
@@ -109,7 +112,7 @@ static bool cr_obj_setup_in(struct cr703_ha *cr) {
          MGOS_GPIO_INT_EDGE_ANY, 50, cr_int, cr);
   TRY_GT(mgos_gpio_set_button_handler, cr->in.shut, pull,
          MGOS_GPIO_INT_EDGE_ANY, 50, cr_int, cr);
-  cr->st.tgt = cr_st_read(cr);
+  cr_st_in_reset(cr);
   return true;
 
 err:
