@@ -11,7 +11,7 @@ config_schema:
   - ["cr703", "o", {"title": "CR703 motorised valve settings"}]
   - ["cr703.ha", "o", {"title": "CR703 valve Home Assistant settings"}]
   - ["cr703.ha.enable", "b", false, {"title": "Enable Home Assistant MQTT comms"}]
-  - ["cr703.max_switch_sec", "i", 10, {"title": "Max switching time"}]
+  - ["cr703.ha.max_switch_sec", "i", 5, {"title": "Max switching time"}]
 
 libs:
   - {origin: https://github.com/QRPp/mgos-helpers, name: helpers}

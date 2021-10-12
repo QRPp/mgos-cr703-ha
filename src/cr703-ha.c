@@ -3,6 +3,7 @@
 #include <mgos-helpers/json.h>
 #include <mgos-helpers/log.h>
 #include <mgos-helpers/mem.h>
+#include <mgos-helpers/tmr.h>
 
 enum cr703_state {      // two-bit value
   CR_ST_TRANSIENT = 0,  // -shut -open
@@ -74,8 +75,9 @@ static void cr_st_tmr(void *opaque) {
 
 static void cr_st_set(struct cr703_ha *cr, enum cr703_state tgt) {
   if (cr->st.tgt == tgt) return;
-  if (cr->tmr) mgos_clear_timer(cr->tmr);
-  if (!(cr->tmr = mgos_set_timer(5000, 0, cr_st_tmr, cr)))
+  if (!MGOS_TMR_RESET(cr->tmr,
+                      mgos_sys_config_get_cr703_ha_max_switch_sec() * 1000, 0,
+                      cr_st_tmr, cr))
     FNERR_RET(, CALL_FAILED(mgos_set_timer));
   mgos_gpio_write(cr->out.open, cr->out.invert ^ (tgt == CR_ST_OPEN));
   mgos_gpio_write(cr->out.power, !cr->out.invert);
