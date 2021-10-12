@@ -1,0 +1,19 @@
+author: QRPp <awesome.walrus+github@gmail.com>
+description: Mongoose OS Home Assistant binding for CR703 motorised valves
+name: cr703-ha
+type: lib
+version: 1.0
+manifest_version: 2020-08-02
+
+sources: [src]
+
+config_schema:
+  - ["cr703", "o", {"title": "CR703 motorised valve settings"}]
+  - ["cr703.ha", "o", {"title": "CR703 valve Home Assistant settings"}]
+  - ["cr703.ha.enable", "b", false, {"title": "Enable Home Assistant MQTT comms"}]
+  - ["cr703.max_switch_sec", "i", 10, {"title": "Max switching time"}]
+
+libs:
+  - {origin: https://github.com/QRPp/mgos-helpers, name: helpers}
+  - origin: https://github.com/mongoose-os-libs/homeassistant
+  - origin: https://github.com/mongoose-os-libs/rpc-common
