@@ -155,7 +155,8 @@ static bool cr_obj_fromjson(struct mgos_homeassistant *ha,
 
   cr->o = mgos_homeassistant_object_add(
       ha, name ?: cr_is_303(cr) ? "cr303" : "cr703", COMPONENT_SWITCH,
-      "\"val_tpl\":\"{{value_json.state}}\"", cr_stat, cr);
+      "\"ic\":\"hass:valve\",\"val_tpl\":\"{{value_json.state}}\"", cr_stat,
+      cr);
   if (!cr->o) FNERR_GT(CALL_FAILED("mgos_homeassistant_object_add"));
   TRY_GT(mgos_homeassistant_object_add_cmd_cb, cr->o, NULL, cr_cmd);
   cr->o->config_sent = false;
