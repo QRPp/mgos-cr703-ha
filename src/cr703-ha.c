@@ -33,12 +33,6 @@ struct cr703_ha {
   } st;
 };
 
-static void cr_st_in_reset(struct cr703_ha *cr) {
-  cr->st.tgt = cr->st.now =
-      (!cr->in.invert ^ !mgos_gpio_read(cr->in.open) ? CR_ST_OPEN : 0) |
-      (!cr->in.invert ^ !mgos_gpio_read(cr->in.shut) ? CR_ST_SHUT : 0);
-}
-
 static bool cr_is_303(const struct cr703_ha *cr) {
   return cr->in.open < 0;
 }
@@ -66,10 +60,7 @@ static void cr_st_tmr(void *opaque) {
   cr->tmr = MGOS_INVALID_TIMER_ID;
   mgos_gpio_write(cr->out.power, cr->out.invert);
   mgos_gpio_write(cr->out.open, cr->out.invert);
-  if (cr_is_303(cr))
-    cr->st.now = cr->st.tgt;  // Presume successful switching
-  else
-    cr_st_in_reset(cr);  // Avoid race b/w timer and interrupts
+  if (cr_is_303(cr)) cr->st.now = cr->st.tgt;  // Presume successful switching
   if (cr->o) mgos_homeassistant_object_send_status(cr->o);
 }
 
@@ -112,7 +103,9 @@ static bool cr_obj_setup_in(struct cr703_ha *cr) {
          MGOS_GPIO_INT_EDGE_ANY, 50, cr_int, cr);
   TRY_GT(mgos_gpio_set_button_handler, cr->in.shut, pull,
          MGOS_GPIO_INT_EDGE_ANY, 50, cr_int, cr);
-  cr_st_in_reset(cr);
+  cr->st.tgt = cr->st.now =
+      (!cr->in.invert ^ !mgos_gpio_read(cr->in.open) ? CR_ST_OPEN : 0) |
+      (!cr->in.invert ^ !mgos_gpio_read(cr->in.shut) ? CR_ST_SHUT : 0);
   return true;
 
 err:
