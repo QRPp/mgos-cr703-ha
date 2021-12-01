@@ -65,7 +65,6 @@ static void cr_st_tmr(void *opaque) {
 }
 
 static void cr_st_set(struct cr703_ha *cr, enum cr703_state tgt) {
-  if (cr->st.tgt == tgt) return;
   if (!MGOS_TMR_RESET(cr->tmr,
                       mgos_sys_config_get_cr703_ha_max_switch_sec() * 1000, 0,
                       cr_st_tmr, cr))
