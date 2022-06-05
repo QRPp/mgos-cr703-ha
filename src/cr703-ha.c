@@ -41,20 +41,6 @@ static bool cr_st_is_good(const struct cr703_ha *cr) {
   return cr->st.now == CR_ST_OPEN || cr->st.now == CR_ST_SHUT;
 }
 
-static void cr_st_tmr(void *opaque);
-static void cr_int(int pin, void *opaque) {
-  struct cr703_ha *cr = opaque;
-  uint8_t bit = pin == cr->in.open ? CR_ST_OPEN : CR_ST_SHUT;
-  if (!cr->in.invert ^ !mgos_gpio_read(pin))
-    cr->st.now |= bit;
-  else
-    cr->st.now &= ~bit;
-  if (cr->st.now == cr->st.tgt && cr->tmr) {
-    mgos_clear_timer(cr->tmr);
-    cr_st_tmr(cr);
-  }
-}
-
 static void cr_st_tmr(void *opaque) {
   struct cr703_ha *cr = opaque;
   cr->tmr = MGOS_INVALID_TIMER_ID;
@@ -91,6 +77,19 @@ static void cr_stat(struct mgos_homeassistant_object *o, struct json_out *out) {
   else
     json_printf(out, "open:%B,shut:%B,state:%Q", cr->st.now & CR_ST_OPEN,
                 cr->st.now & CR_ST_SHUT, NULL);
+}
+
+static void cr_int(int pin, void *opaque) {
+  struct cr703_ha *cr = opaque;
+  uint8_t bit = pin == cr->in.open ? CR_ST_OPEN : CR_ST_SHUT;
+  if (!cr->in.invert ^ !mgos_gpio_read(pin))
+    cr->st.now |= bit;
+  else
+    cr->st.now &= ~bit;
+  if (cr->st.now == cr->st.tgt && cr->tmr) {
+    mgos_clear_timer(cr->tmr);
+    cr_st_tmr(cr);
+  }
 }
 
 static bool cr_obj_setup_in(struct cr703_ha *cr) {
