@@ -41,7 +41,7 @@ static bool cr_st_is_good(const struct cr703_ha *cr) {
   return cr->st.now == CR_ST_OPEN || cr->st.now == CR_ST_SHUT;
 }
 
-static void cr_st_tmr(void *opaque) {
+static void cr_st_set_tmr(void *opaque) {
   struct cr703_ha *cr = opaque;
   cr->tmr = MGOS_INVALID_TIMER_ID;
   mgos_gpio_write(cr->out.power, cr->out.invert);
@@ -53,7 +53,7 @@ static void cr_st_tmr(void *opaque) {
 static void cr_st_set(struct cr703_ha *cr, enum cr703_state tgt) {
   if (!MGOS_TMR_RESET(cr->tmr,
                       mgos_sys_config_get_cr703_ha_max_switch_sec() * 1000, 0,
-                      cr_st_tmr, cr))
+                      cr_st_set_tmr, cr))
     FNERR_RET(, CALL_FAILED(mgos_set_timer));
   mgos_gpio_write(cr->out.open, cr->out.invert ^ (tgt == CR_ST_OPEN));
   mgos_gpio_write(cr->out.power, !cr->out.invert);
@@ -88,7 +88,7 @@ static void cr_int(int pin, void *opaque) {
     cr->st.now &= ~bit;
   if (cr->st.now == cr->st.tgt && cr->tmr) {
     mgos_clear_timer(cr->tmr);
-    cr_st_tmr(cr);
+    cr_st_set_tmr(cr);
   }
 }
 
@@ -152,7 +152,11 @@ static bool cr_obj_fromjson(struct mgos_homeassistant *ha,
   TRY_GT(cr_obj_setup, cr);
 
   cr->o = mgos_homeassistant_object_add(
-      ha, name ?: cr_is_303(cr) ? "cr303" : "cr703", COMPONENT_SWITCH,
+      ha,
+      name
+          ?: cr_is_303(cr) ? "cr303"
+                           : "cr703",
+      COMPONENT_SWITCH,
       "\"ic\":\"hass:valve\",\"val_tpl\":\"{{value_json.state}}\"", cr_stat,
       cr);
   if (!cr->o) FNERR_GT(CALL_FAILED("mgos_homeassistant_object_add"));
