@@ -28,8 +28,9 @@ struct cr703_ha {
   } out;
 
   struct {
-    uint8_t now;  // enum cr703_state value
-    uint8_t tgt;  // Ditto
+    unsigned period;  // Seconds between state updates
+    uint8_t now;      // enum cr703_state value
+    uint8_t tgt;      // Ditto
   } st;
 };
 
@@ -41,13 +42,23 @@ static bool cr_st_is_good(const struct cr703_ha *cr) {
   return cr->st.now == CR_ST_OPEN || cr->st.now == CR_ST_SHUT;
 }
 
+static void cr_st_stat_tmr(void *opaque) {
+  mgos_homeassistant_object_send_status(((struct cr703_ha *) opaque)->o);
+}
+
+static void cr_st_stat_tmr_restart(struct cr703_ha *cr) {
+  if (!MGOS_TMR_RESET(cr->tmr, cr->st.period * 1000,
+                      MGOS_TIMER_REPEAT | MGOS_TIMER_RUN_NOW, cr_st_stat_tmr,
+                      cr))
+    FNERR(CALL_FAILED(mgos_set_timer));
+}
+
 static void cr_st_set_tmr(void *opaque) {
   struct cr703_ha *cr = opaque;
-  cr->tmr = MGOS_INVALID_TIMER_ID;
   mgos_gpio_write(cr->out.power, cr->out.invert);
   mgos_gpio_write(cr->out.open, cr->out.invert);
   if (cr_is_303(cr)) cr->st.now = cr->st.tgt;  // Presume successful switching
-  if (cr->o) mgos_homeassistant_object_send_status(cr->o);
+  cr_st_stat_tmr_restart(cr);
 }
 
 static void cr_st_set(struct cr703_ha *cr, enum cr703_state tgt) {
@@ -86,10 +97,7 @@ static void cr_int(int pin, void *opaque) {
     cr->st.now |= bit;
   else
     cr->st.now &= ~bit;
-  if (cr->st.now == cr->st.tgt && cr->tmr) {
-    mgos_clear_timer(cr->tmr);
-    cr_st_set_tmr(cr);
-  }
+  if (cr->st.now == cr->st.tgt) cr_st_set_tmr(cr);
 }
 
 static bool cr_obj_setup_in(struct cr703_ha *cr) {
@@ -125,7 +133,7 @@ static bool cr_obj_setup(struct cr703_ha *cr) {
 }
 
 #define CONF_FMT                    \
-  "{boot_on:%B,name:%Q,"            \
+  "{boot_on:%B,name:%Q,period:%u,"  \
   "in:{invert:%B,open:%d,shut:%d}," \
   "out:{invert:%B,open:%d,power:%d}}"
 static bool cr_obj_fromjson(struct mgos_homeassistant *ha,
@@ -137,10 +145,11 @@ static bool cr_obj_fromjson(struct mgos_homeassistant *ha,
 
   cr = TRY_CALLOC_OR(goto err, cr);
   cr->in.open = cr->in.shut = cr->out.open = cr->out.power = -1;
+  cr->st.period = 60;
 
   TRY_JSON_SCANF_OR(goto err, v.ptr, v.len, CONF_FMT, &boot_on, &name,
-                    &cr->in.invert, &cr->in.open, &cr->in.shut, &cr->out.invert,
-                    &cr->out.open, &cr->out.power);
+                    &cr->st.period, &cr->in.invert, &cr->in.open, &cr->in.shut,
+                    &cr->out.invert, &cr->out.open, &cr->out.power);
 
   if (boot_on == BOOL_INVAL && cr_is_303(cr))
     FNERR_GT("need boot_on %s", "or both in.open+in.shut");
@@ -164,10 +173,12 @@ static bool cr_obj_fromjson(struct mgos_homeassistant *ha,
   cr->o->config_sent = false;
   if (boot_on != BOOL_INVAL) cr_st_set(cr, boot_on ? CR_ST_OPEN : CR_ST_SHUT);
   if (boot_on == BOOL_INVAL && !cr_st_is_good(cr)) cr_st_set(cr, CR_ST_OPEN);
+  if (!cr->tmr) cr_st_stat_tmr_restart(cr);
   ok = true;
 
 err:
   if (name) free(name);
+  if (!ok && cr && cr->tmr) MGOS_TMR_CLR(cr->tmr);
   if (!ok && cr && cr->o) mgos_homeassistant_object_remove(&cr->o);
   if (!ok && cr) free(cr);
   return ok;
